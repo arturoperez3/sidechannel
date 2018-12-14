@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>tunes4you (be careful...)</title>
+    <link rel="stylesheet" href="chartist.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="sidechannel.js"></script>
+    <script src="chartist.min.js"></script>
+    <style>
+        span {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2fr;
+            background-color: black;
+            color: white;
+            text-align: left;
+            padding-left: 1fr;
+        }
+
+        body {
+            background-color: #a263ff;
+        }
+
+        * {
+            text-align: center;
+            font-family: "Arial", serif;
+        }
+
+        input[type=text] {
+            width: 200px;
+            padding: 6px 10px;
+            margin: 4px 0;
+            box-sizing: border-box;
+            border: 2px solid #000000;
+            border-radius: 4px;
+            background-color: #e9e9e9;
+            color: black;
+        }
+
+        ::placeholder {
+            color: black;
+            opacity: .5;
+        }
+
+        input[type=button] {
+            border: 2px solid #FFFFFF;
+            border-radius: 4px;
+        }
+
+        .wide {
+            width: 90%;
+            max-width: 100px;
+        }
+            
+        .btn {
+            font-size: 1em; 
+            padding: 1em; 
+            border: 1px solid black; 
+        }
+    </style>
+<body onload = "initSideChannel();">
+<br>
+<h3>
+    Welcome to tunes4you!
+</h3>
+<h4>
+    Get song recommendations based off of your favorite artists!
+
+    (But be careful! You may get hacked!)
+</h4>
+<br />
+<input type="button" id="stopbtn" value="Start" class="wide btn" />
+<br>
+<form id="recForm">
+    Enter an artist:<br>
+    <input type="text" name="artistOne" placeholder="Yellowcard..."><br>
+    <input type="button" onclick="onSubmit()" value="Submit">
+</form>
+<h4>Results (Artist - Album - Song):</h4>
+<script>
+
+    // Start the time measurement
+    function startit() {
+        timer.postMessage("init");
+        timer.postMessage("start");
+    }
+
+    // Stop the the time measurement
+    function stopit() {
+        stop = !stop;
+        if (!stop) {
+            document.getElementById("stopbtn").style.display = "none";
+            document.getElementById("divplot").style.display = "";
+            document.getElementById("restartbtn").style.display = "";
+            timer.postMessage("stop");
+        } else {
+            document.getElementById("stopbtn").value = "Stop";
+            document.getElementById("stopbtn").blur();
+            setTimeout(startit, 0);
+        }
+    }
+
+    // Plot the results using chartist 
+    function plot(results, presses) {
+        var res = [];
+
+        // remove unused array elements
+        for (var i = 20; i < results.length; i++) {
+            if (results[i] == 0) break;
+                res[i] = results[i];
+        }
+            
+        // plot
+        new Chartist.Line('.ct-chart', {
+            series: [res]
+        }, {
+            showPoint: false,
+            axisX: {
+                showGrid: false,
+                showLabel: false,
+                offset: 0
+            },
+            axisY: {
+                showGrid: false,
+                showLabel: false,
+                offset: 0
+            },
+            fullWidth: true,
+            chartPadding: {
+                right: 40
+            }
+        });
+
+        let userInformation = document.getElementById("user");
+
+        // print raw user information
+        for (let i = 0; i < res.length; i++) {
+            let text = JSON.stringify(res[i]);
+
+            let entry = document.createElement('div'), entryText = document.createTextNode(text);
+
+            entry.appendChild(entryText);
+
+            userInformation.appendChild(entry);
+
+            // sanity check
+            console.log(text + i);
+        }
+    }
+
+    var stop = 0;
+    var timer;
+            
+    // Initialize the sidechannel attack        
+    function initSideChannel() {
+        timer = new Worker("sidechannel.js");
+        timer.onmessage = function(event) {
+            var parsed = JSON.parse(event.data);
+
+            // pass results into chartist
+            plot(parsed[0], parsed[1]);
+        }
+        document.getElementById("stopbtn").onclick = stopit;
+        document.getElementById("restartbtn").onclick = function() {
+        window.location.reload();
+        };
+    }
+
+    // onSubmit()
+    // Called when the artist form is submitted.
+    // First gets the access_token from the server. Then performs the search for the artist's id.
+    // Uses that id to get recommended songs from Spotify's api. These songs are then added to the "results" div.
+    function onSubmit() {
+
+        let list = document.getElementById("results");
+
+        // Clear previous search results
+        while (list.firstChild) {
+            list.removeChild(list.firstChild);
+        }
+
+        if (document.getElementsByName('artistOne'[0].value)) {
+
+            $.ajax({
+                url: "/token",
+                method: "GET",
+                async: "false",
+                success: function(data) {
+                    let token = data;
+
+                    $.ajax({
+                        url: "https://api.spotify.com/v1/search?q=" + document.getElementsByName("artistOne")[0].value + "%20&type=artist",
+                        method: "GET",
+                        async: "false",
+                        headers: {
+                            "Authorization": "Bearer " + token
+                        },
+                        success: function (data) {
+                            let id = data.artists.items[0].id;
+
+                            $.ajax({
+                                url: "https://api.spotify.com/v1/recommendations?limit=10&seed_artists=" + id,
+                                method: "GET",
+                                async: "false",
+                                headers: {
+                                    "Authorization": "Bearer " + token
+                                },
+                                success: function (data) {
+                                    for (let i = 0; i < 10; i++) {
+                                        let text = JSON.stringify(data.tracks[i].album.artists[0].name).replace(/^"(.*)"$/, '$1') + " - " +
+                                            JSON.stringify(data.tracks[i].album.name).replace(/^"(.*)"$/, '$1') + " - " +
+                                            JSON.stringify(data.tracks[i].name).replace(/^"(.*)"$/, '$1');
+
+                                        let entry = document.createElement('div'), entryText = document.createTextNode(text);
+                                        let space = document.createElement('br'), link = document.createElement('a'), pic = document.createElement('img');
+
+                                        link.setAttribute('href', JSON.stringify(data.tracks[i].external_urls.spotify).replace(/^"(.*)"$/, '$1'));
+                                        link.setAttribute('target', '_blank');
+                                        pic.setAttribute('src', JSON.stringify(data.tracks[i].album.images[2].url).replace(/^"(.*)"$/, '$1'));
+
+                                        entry.appendChild(entryText);
+                                        entry.appendChild(space);
+                                        link.appendChild(pic);
+                                        entry.appendChild(link);
+
+                                        list.appendChild(entry);
+                                    }
+                                    // Clear previous artist id
+                                    id = "";
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+
+        }
+
+    }
+</script>
+</head>
+<div id="results">
+</div>
+<div class="ct-chart ct-perfect-fourth" id="divplot" style="display: none;"></div>
+<input type="button" id="restartbtn" value="Restart" style="display: none;" class="wide btn" />
+<div id="user">
+</div>
+</body>
+</html>
