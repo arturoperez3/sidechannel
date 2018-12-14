@@ -33,10 +33,6 @@ app.get('/token', function(req,res) {
         });
 });
 
-// app.get('/measure', function(req,res) {
-//     res
-// });
-
 app.listen(8080);
 
 console.log("Sidechannel listening on 8080");
