@@ -1,5 +1,3 @@
-/* Harrison Cates & Arturo Perez */
-
 let express = require("express");
 let axios = require('axios');
 let app = express();
