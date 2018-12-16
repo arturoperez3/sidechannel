@@ -72,8 +72,6 @@
     (But be careful! You may get hacked!)
 </h4>
 <br />
-<input type="button" id="stopbtn" value="Start" class="wide btn" />
-<br>
 <form id="recForm">
     Enter an artist:<br>
     <input type="text" name="artistOne" placeholder="Yellowcard..."><br>
@@ -81,93 +79,124 @@
 </form>
 <h4>Results (Artist - Album - Song):</h4>
 <script>
-
-    // Start the time measurement
-    function startit() {
-        timer.postMessage("init");
-        timer.postMessage("start");
-    }
-
-    // Stop the the time measurement
-    function stopit() {
-        stop = !stop;
-        if (!stop) {
-            document.getElementById("stopbtn").style.display = "none";
-            document.getElementById("divplot").style.display = "";
-            document.getElementById("restartbtn").style.display = "";
-            timer.postMessage("stop");
-        } else {
-            document.getElementById("stopbtn").value = "Stop";
-            document.getElementById("stopbtn").blur();
-            setTimeout(startit, 0);
-        }
-    }
-
-    // Plot the results using chartist 
-    function plot(results, presses) {
-        var res = [];
-
-        // remove unused array elements
-        for (var i = 20; i < results.length; i++) {
-            if (results[i] == 0) break;
-                res[i] = results[i];
-        }
             
-        // plot
-        new Chartist.Line('.ct-chart', {
-            series: [res]
-        }, {
-            showPoint: false,
-            axisX: {
-                showGrid: false,
-                showLabel: false,
-                offset: 0
-            },
-            axisY: {
-                showGrid: false,
-                showLabel: false,
-                offset: 0
-            },
-            fullWidth: true,
-            chartPadding: {
-                right: 40
-            }
-        });
+    // Initialize the sidechannel attack        
+    function initSideChannel() {
 
-        let userInformation = document.getElementById("user");
+        // I am running a 2017 Macbook Pro 3.1GHz Intel Core i& with 8MB of L3 Cache 
 
-        // print raw user information
-        for (let i = 0; i < res.length; i++) {
-            let text = JSON.stringify(res[i]);
+        // PRIME + PROBE
+
+        // initialize Prime buffer
+        var primeBuffer = new ArrayBuffer(8192 * 1024); // 8 MB
+        var primeView = new DataView(primeBuffer); 
+
+        // initialize Probe buffer 
+        var probeBuffer = new ArrayBuffer(8192 * 1024); // 8 MB
+        var probeView = new DataView(probeBuffer); 
+        var startAddress = 0;
+        
+        // L3 cache line size (64 bytes)
+        var offset = 64;
+        var x = 0;
+        var numRounds = 5000;
+        
+        // initial data
+        var flushed1 = [];
+        var unflushed1 = [];
+        var unflushed2 = [];
+        var flushed2 = [];
+        
+        // initialize linked list
+        for (var i = 0; i < ((8192 * 1023) / offset); i++) {
+             probeView.setUint32(i * offset, (i+1) * offset);
+        }
+        probeView.setUint32((((8192 * 1023) / offset) - 1 ) * offset, 0);
+        
+        var current;
+        for (var round = 0; round < numRounds; round++) {
+        // invalidation of all cache sets in L3 buffer
+            current = startAddress;
+            do {
+                current = probeView.getUint32(current);
+            } while (current != startAddress);
+        
+            // first retrieval, hypothesized to be from RAM
+            var startTime1 = window.performance.now();
+            current = primeView.getUint32(x);
+            var endTime1 = window.performance.now();
+            var diffTime1 = endTime1 - startTime1;
+            
+            // second retrieval, hypothesized to be from L3
+            var startTime2 = window.performance.now();
+            current = primeView.getUint32(x);
+            var endTime2 = window.performance.now();
+            var diffTime2 = endTime2 - startTime2;
+            
+            // third retrieval, hypothesized to be from L3
+            var startTime3 = window.performance.now();
+            current = primeView.getUint32(x);
+            var endTime3 = window.performance.now();
+            var diffTime3 = endTime3 - startTime3;
+            
+            // eviction round 2
+            current = startAddress;
+            do {
+                current = probeView.getUint32(current);
+            } while (current != startAddress);
+
+            // fourth retrieval, hypothesized to be from RAM
+            var startTime4 = window.performance.now();
+            current = primeView.getUint32(x);
+            var endTime4 = window.performance.now();
+            var diffTime4 = endTime4 - startTime4;
+            
+            flushed1.push(Math.floor(diffTime1 * 100000));
+            unflushed1.push(Math.floor(diffTime2 * 100000));
+            unflushed2.push(Math.floor(diffTime3 * 100000));
+            flushed2.push(Math.floor(diffTime4 * 100000));
+        }
+
+        // L = list
+        let Lflushed1 = document.getElementById("flushed1");
+        let Lunflushed1 = document.getElementById("unflushed1");
+        let Lflushed2 = document.getElementById("flushed2");
+        let Lunflushed2 = document.getElementById("unflushed2");
+
+        // calculate averages 
+
+        let flushed1raw = 0;
+        let unflushed1raw = 0;
+        let flushed2raw = 0;
+        let unflushed2raw = 0;
+        for (let i = 0; i < 5000; i++) {
+            flushed1raw = flushed1raw + flushed1[i];
+            unflushed1raw = unflushed1raw + unflushed1[i];
+            flushed2raw = flushed2raw + flushed2[i];
+            unflushed2raw = unflushed2raw + unflushed2[i];
+        }
+
+        flushed1raw = flushed1raw / 5000;
+        unflushed1raw = unflushed1raw / 5000;
+        flushed2raw = flushed2raw / 5000;
+        unflushed2raw = unflushed2raw / 5000;
+
+        printHTML("flushed 1",flushed1raw, Lflushed1);
+        printHTML("unflushed 1",unflushed1raw, Lunflushed1);
+        printHTML("flushed 2" ,flushed2raw, Lflushed2);
+        printHTML("unflushed 2", unflushed2raw, Lunflushed2);
+
+        // print to html
+        function printHTML(type, result, list) {
+            let text = type + " average time: " + JSON.stringify(result);
 
             let entry = document.createElement('div'), entryText = document.createTextNode(text);
 
             entry.appendChild(entryText);
 
-            userInformation.appendChild(entry);
-
-            // sanity check
-            console.log(text + i);
+            list.appendChild(entry);
         }
-    }
-
-    var stop = 0;
-    var timer;
-            
-    // Initialize the sidechannel attack        
-    function initSideChannel() {
-        timer = new Worker("sidechannel.js");
-        timer.onmessage = function(event) {
-            var parsed = JSON.parse(event.data);
-
-            // pass results into chartist
-            plot(parsed[0], parsed[1]);
-        }
-        document.getElementById("stopbtn").onclick = stopit;
-        document.getElementById("restartbtn").onclick = function() {
-        window.location.reload();
-        };
-    }
+    };
 
     // onSubmit()
     // Called when the artist form is submitted.
@@ -242,11 +271,15 @@
     }
 </script>
 </head>
-<div id="results">
+<div id="flushed1">
 </div>
-<div class="ct-chart ct-perfect-fourth" id="divplot" style="display: none;"></div>
-<input type="button" id="restartbtn" value="Restart" style="display: none;" class="wide btn" />
-<div id="user">
+<div id="unflushed1">
+</div>
+<div id="flushed2">
+</div>
+<div id="unflushed2">
+</div>
+<div id="results">
 </div>
 </body>
 </html>
