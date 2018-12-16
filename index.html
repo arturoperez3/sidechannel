@@ -121,19 +121,19 @@
                 current = probeView.getUint32(current);
             } while (current != startAddress);
         
-            // first retrieval, hypothesized to be from RAM
+            // first retrieval, from RAM
             var startTime1 = window.performance.now();
             current = primeView.getUint32(x);
             var endTime1 = window.performance.now();
             var diffTime1 = endTime1 - startTime1;
             
-            // second retrieval, hypothesized to be from L3
+            // second retrieval, from L3
             var startTime2 = window.performance.now();
             current = primeView.getUint32(x);
             var endTime2 = window.performance.now();
             var diffTime2 = endTime2 - startTime2;
             
-            // third retrieval, hypothesized to be from L3
+            // third retrieval, from L3
             var startTime3 = window.performance.now();
             current = primeView.getUint32(x);
             var endTime3 = window.performance.now();
@@ -145,7 +145,7 @@
                 current = probeView.getUint32(current);
             } while (current != startAddress);
 
-            // fourth retrieval, hypothesized to be from RAM
+            // fourth retrieval, from RAM
             var startTime4 = window.performance.now();
             current = primeView.getUint32(x);
             var endTime4 = window.performance.now();
